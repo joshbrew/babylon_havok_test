@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>Babylon.js Instanced Mesh Benchmark</title>
+  <!-- Babylon.js -->
+  <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <style>
+    html,
+    body {
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    #renderCanvas {
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    #canvasZone {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvasZone"><canvas id="renderCanvas"></canvas></div>
+  <script>
+    const canvas = document.getElementById("renderCanvas");
+    const engine = new BABYLON.WebGPUEngine(canvas);
+
+    const createScene = async function (numSpheres) {
+      
+      await engine.initAsync();
+        // This creates a basic Babylon Scene object (non-mesh)
+      const scene = new BABYLON.Scene(engine);
+
+      // This creates and positions a free camera (non-mesh)
+      const camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 5, -10), scene);
+      camera.setTarget(BABYLON.Vector3.Zero());
+      camera.attachControl(canvas, true);
+
+      // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
+      const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+      light.intensity = 0.7;
+
+      // Our built-in 'sphere' shape.
+      const sphere = BABYLON.MeshBuilder.CreateSphere("sphere", { diameter: 2, segments: 32 }, scene);
+      sphere.isVisible = false; // Hide the initial instance template
+
+      // Our built-in 'ground' shape.
+      const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 1000, height: 1000 }, scene);
+
+      // Initialize plugin
+      const havokInstance = await HavokPhysics();
+      // Pass the engine to the plugin
+      const hk = new BABYLON.HavokPlugin(true, havokInstance);
+      // Enable physics in the scene with gravity
+      scene.enablePhysics(new BABYLON.Vector3(0, -9.8, 0), hk);
+
+      // Create arrays to hold instances
+      const sphereInstances = [];
+
+      // Create instances of sphere and ground
+      for (let i = 0; i < numSpheres; i++) {
+        const inst = sphere.createInstance(`sphere${i}`);
+        inst.position.y = 4;
+        inst.position.x = Math.random() * 90 - 45;
+        inst.position.z = Math.random() * 90 - 45;
+        sphereInstances.push(inst);
+        // Create associated body for physics
+        new BABYLON.PhysicsAggregate(inst, BABYLON.PhysicsShapeType.SPHERE, { mass: 1, restitution: 0.75 }, scene);
+      
+        
+    }
+
+      // Create a static box shape for the ground.
+      const groundAggregate = new BABYLON.PhysicsAggregate(ground, BABYLON.PhysicsShapeType.BOX, { mass: 0 }, scene);
+
+      return scene;
+    };
+
+    let scene = null;
+
+    function runBenchmark(numSpheres) {
+      if (scene) {
+        scene.dispose();
+      }
+
+      createScene(numSpheres).then((scn) => {
+        scene = scn;
+        engine.runRenderLoop(function () {
+          if (scene) {
+            scene.render();
+          }
+        });
+      });
+    }
+
+    // Resize
+    window.addEventListener("resize", function () {
+      engine.resize();
+    });
+
+    // Run benchmark with different numbers of instances
+
+    runBenchmark(3000);
+  </script>
+</body>
+</html>
